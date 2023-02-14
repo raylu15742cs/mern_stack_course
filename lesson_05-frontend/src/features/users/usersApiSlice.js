@@ -48,7 +48,7 @@ const selectUsersData = createSelector(
 //getSelectors creates these selectors and we rename them with alieses using destructuring
 export const {
     selectAll: selectAllUsers,
-    selectById: selectUsersById,
+    selectById: selectUserById,
     selectIds: selectUserIds
     // Pass in a selector that returns the users slice of state
 } = usersAdapter.getSelectors(state => selectUsersData(state)?? initialState)
