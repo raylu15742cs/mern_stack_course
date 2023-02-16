@@ -19,3 +19,14 @@ const refresh = (req, res) => {
 }
 
 // @desc Logout
+// @route POSt /auth/logout
+// @access Public - just to clear cookie if exists
+const logout = (req, res) => {
+
+}
+
+module.exports = {
+    login,
+    refresh,
+    logout
+}
