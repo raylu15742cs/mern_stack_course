@@ -14,7 +14,7 @@ const PersistLogin = () => {
     const [trueSuccess, setTrueSuccess] = useState(false)
 
     const [refresh, {
-        isUnitialzied,
+        isUninitialized,
         isLoading,
         isSuccess,
         isError,
@@ -65,10 +65,11 @@ const PersistLogin = () => {
     } else if (isSuccess && trueSuccess) {// persist: yes, token:yes
         console.log('success')
         content = <Outlet />
-    } else if (token && isUnitialzied) { // persist: yes , token :yes
-        console.log('token and uninit')
-        console.log(isUnitialzied)
-        content = <Outlet />
+    } else if (token && isUninitialized) {
+      // persist: yes , token :yes
+      console.log('token and uninit');
+      console.log(isUninitialized);
+      content = <Outlet />;
     }
 
     return content

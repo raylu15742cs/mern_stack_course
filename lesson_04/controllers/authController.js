@@ -1,13 +1,12 @@
 const User = require('../models/User')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
-const asyncHandler = require('express-async-handler')
 
 
 // @desc Login
 // @route POST /auth
 // @access Public
-const login = asyncHandler(async (req, res) => {
+const login = async (req, res) => {
     const { username, password } = req.body
 
     if(!username || !password) {
@@ -26,19 +25,19 @@ const login = asyncHandler(async (req, res) => {
 
     const accessToken = jwt.sign(
         {
-            'UserInfo' : {
-                'username' : foundUser.username,
-                'roles' : foundUser.roles
+            "UserInfo" : {
+                "username" : foundUser.username,
+                "roles" : foundUser.roles
             }
         },
         process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: '1m'}
+        { expiresIn: '15m'}
     )
 
     const refreshToken = jwt.sign(
-        { 'username' : foundUser.username},
+        { "username" : foundUser.username},
         process.env.REFRESH_TOKEN_SECRET,
-        { expiresIn: '1d'}
+        { expiresIn: '7d'}
     )
 
     // Create secure cookie with refresh token
@@ -51,13 +50,13 @@ const login = asyncHandler(async (req, res) => {
 
     // Send accessToken containing username and roles
     res.json({ accessToken })
-})
+}
 
 // @desc Refresh
 // @route GET /auth/refresh
 // @access Public - because access token has expired
 const refresh = (req, res) => {
-    const cookie = req.cookies
+    const cookies = req.cookies
 
     if(!cookies?.jwt) return res.status(401).json({ message: 'Unauthorized' })
 
@@ -66,7 +65,7 @@ const refresh = (req, res) => {
     jwt.verify(
         refreshToken,
         process.env.REFRESH_TOKEN_SECRET,
-        asyncHandler(async (err, decoded) => {
+        async (err, decoded) => {
             if (err) return res.status(403).json({ message: 'Forbidden' })
 
             const foundUser = await User.findOne({ username: decoded.username})
@@ -81,12 +80,12 @@ const refresh = (req, res) => {
                     }
                 },
                 process.env.ACCESS_TOKEN_SECRET,
-                { expiresIn: '1m' }
+                { expiresIn: '15m' }
             )
 
             res.json({ accessToken })
         })
-    )
+    
 }
 
 // @desc Logout
