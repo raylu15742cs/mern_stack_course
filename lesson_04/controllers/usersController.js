@@ -1,104 +1,147 @@
-const User = require('../models/User')
-const bcrypt = require('bcrypt')
-const jwt = require('jsonwebtoken')
+const User = require('../models/User');
+const Note = require('../models/Note');
+const bcrypt = require('bcrypt');
 
-// @desc Login
-// @route POST /auth
-// @access Public
-const login = async (req, res) => {
-    const { username, password } = req.body
+// @desc Get all users
+// @route GET /users
+// @access Private
+const getAllUsers = async (req, res) => {
+  // Get all users from MongoDB
+  const users = await User.find().select('-password').lean();
 
-    if (!username || !password) {
-        return res.status(400).json({ message: 'All fields are required' })
-    }
+  // If no users
+  if (!users?.length) {
+    return res.status(400).json({ message: 'No users found' });
+  }
 
-    const foundUser = await User.findOne({ username }).exec()
+  res.json(users);
+};
 
-    if (!foundUser || !foundUser.active) {
-        return res.status(401).json({ message: 'Unauthorized' })
-    }
+// @desc Create new user
+// @route POST /users
+// @access Private
+const createNewUser = async (req, res) => {
+  const { username, password, roles } = req.body;
 
-    const match = await bcrypt.compare(password, foundUser.password)
+  // Confirm data
+  if (!username || !password) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
 
-    if (!match) return res.status(401).json({ message: 'Unauthorized' })
+  // Check for duplicate username
+  const duplicate = await User.findOne({ username })
+    .collation({ locale: 'en', strength: 2 })
+    .lean()
+    .exec();
 
-    const accessToken = jwt.sign(
-        {
-            "UserInfo": {
-                "username": foundUser.username,
-                "roles": foundUser.roles
-            }
-        },
-        process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: '15m' }
-    )
+  if (duplicate) {
+    return res.status(409).json({ message: 'Duplicate username' });
+  }
 
-    const refreshToken = jwt.sign(
-        { "username": foundUser.username },
-        process.env.REFRESH_TOKEN_SECRET,
-        { expiresIn: '7d' }
-    )
+  // Hash password
+  const hashedPwd = await bcrypt.hash(password, 10); // salt rounds
 
-    // Create secure cookie with refresh token 
-    res.cookie('jwt', refreshToken, {
-        httpOnly: true, //accessible only by web server 
-        secure: true, //https
-        sameSite: 'None', //cross-site cookie 
-        maxAge: 7 * 24 * 60 * 60 * 1000 //cookie expiry: set to match rT
-    })
+  const userObject =
+    !Array.isArray(roles) || !roles.length
+      ? { username, password: hashedPwd }
+      : { username, password: hashedPwd, roles };
 
-    // Send accessToken containing username and roles 
-    res.json({ accessToken })
-}
+  // Create and store new user
+  const user = await User.create(userObject);
 
-// @desc Refresh
-// @route GET /auth/refresh
-// @access Public - because access token has expired
-const refresh = (req, res) => {
-    const cookies = req.cookies
+  if (user) {
+    //created
+    res.status(201).json({ message: `New user ${username} created` });
+  } else {
+    res.status(400).json({ message: 'Invalid user data received' });
+  }
+};
 
-    if (!cookies?.jwt) return res.status(401).json({ message: 'Unauthorized' })
+// @desc Update a user
+// @route PATCH /users
+// @access Private
+const updateUser = async (req, res) => {
+  const { id, username, roles, active, password } = req.body;
 
-    const refreshToken = cookies.jwt
+  // Confirm data
+  if (
+    !id ||
+    !username ||
+    !Array.isArray(roles) ||
+    !roles.length ||
+    typeof active !== 'boolean'
+  ) {
+    return res
+      .status(400)
+      .json({ message: 'All fields except password are required' });
+  }
 
-    jwt.verify(
-        refreshToken,
-        process.env.REFRESH_TOKEN_SECRET,
-        async (err, decoded) => {
-            if (err) return res.status(403).json({ message: 'Forbidden' })
+  // Does the user exist to update?
+  const user = await User.findById(id).exec();
 
-            const foundUser = await User.findOne({ username: decoded.username }).exec()
+  if (!user) {
+    return res.status(400).json({ message: 'User not found' });
+  }
 
-            if (!foundUser) return res.status(401).json({ message: 'Unauthorized' })
+  // Check for duplicate
+  const duplicate = await User.findOne({ username })
+    .collation({ locale: 'en', strength: 2 })
+    .lean()
+    .exec();
 
-            const accessToken = jwt.sign(
-                {
-                    "UserInfo": {
-                        "username": foundUser.username,
-                        "roles": foundUser.roles
-                    }
-                },
-                process.env.ACCESS_TOKEN_SECRET,
-                { expiresIn: '15m' }
-            )
+  // Allow updates to the original user
+  if (duplicate && duplicate?._id.toString() !== id) {
+    return res.status(409).json({ message: 'Duplicate username' });
+  }
 
-            res.json({ accessToken })
-        }
-    )
-}
+  user.username = username;
+  user.roles = roles;
+  user.active = active;
 
-// @desc Logout
-// @route POST /auth/logout
-// @access Public - just to clear cookie if exists
-const logout = (req, res) => {
-    const cookies = req.cookies
-    if (!cookies?.jwt) return res.sendStatus(204) //No content
-    res.clearCookie('jwt', { httpOnly: true, sameSite: 'None', secure: true })
-    res.json({ message: 'Cookie cleared' })
-}
+  if (password) {
+    // Hash password
+    user.password = await bcrypt.hash(password, 10); // salt rounds
+  }
+
+  const updatedUser = await user.save();
+
+  res.json({ message: `${updatedUser.username} updated` });
+};
+
+// @desc Delete a user
+// @route DELETE /users
+// @access Private
+const deleteUser = async (req, res) => {
+  const { id } = req.body;
+
+  // Confirm data
+  if (!id) {
+    return res.status(400).json({ message: 'User ID Required' });
+  }
+
+  // Does the user still have assigned notes?
+  const note = await Note.findOne({ user: id }).lean().exec();
+  if (note) {
+    return res.status(400).json({ message: 'User has assigned notes' });
+  }
+
+  // Does the user exist to delete?
+  const user = await User.findById(id).exec();
+
+  if (!user) {
+    return res.status(400).json({ message: 'User not found' });
+  }
+
+  const result = await user.deleteOne();
+
+  const reply = `Username ${result.username} with ID ${result._id} deleted`;
+
+  res.json(reply);
+};
 
 module.exports = {
-    login,
-    refresh,
-    logout
-}
+  getAllUsers,
+  createNewUser,
+  updateUser,
+  deleteUser,
+};
