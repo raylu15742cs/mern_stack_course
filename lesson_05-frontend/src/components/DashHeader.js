@@ -79,7 +79,7 @@ const DashHeader = () => {
                 <button
                     className='icon-button'
                     title='Users'
-                    onAbort={onUsersClicked}
+                    onClick={onUsersClicked}
                 >
                     <FontAwesomeIcon icon={faUserGear} />
                 </button>
