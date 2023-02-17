@@ -1,8 +1,8 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPenToSquare } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
-
 import { useGetNotesQuery } from "./notesApiSlice";
+import { memo } from "react";
 
 const Note = ({ noteId}) => {
 
@@ -48,5 +48,6 @@ const Note = ({ noteId}) => {
 
     } else return null
 }
+const memoizedNote = memo(Note)
 
-export default Note
+export default memoizedNote
